@@ -1,0 +1,220 @@
+import pymysql
+import csv
+import re
+from hdfs import InsecureClient
+import os
+ 
+def insert_dermstore_products(connection, csv_path):
+    with connection.cursor() as cursor:
+        # Insert brand
+        cursor.execute("INSERT IGNORE INTO Brand (name) VALUES ('dermstore')")
+        brand_id = cursor.lastrowid if cursor.rowcount > 0 else cursor.execute("SELECT id FROM Brand WHERE name = 'dermstore'").fetchone()[0]
+ 
+        with open(csv_path, 'r', encoding='utf-8-sig') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                print(row)
+                # Insert product
+                rating = None
+                if row['Rating'].strip().upper() != 'N/A':
+                    try:
+                        rating = float(row['Rating'])
+                    except ValueError:
+                        rating = None  # Handle other invalid formats
+                review = None
+                if row['Review'].strip().upper() != 'N/A':
+                    try:
+                        review = int(row['Review'])
+                    except ValueError:
+                        review = None
+ 
+                price = -1
+                if row['Price'] == 'RRP:':
+                    price = -1
+                else:
+                    price = float(row['Price'].strip(' ').replace('$', ''))
+ 
+                cursor.execute("""
+                    INSERT INTO Product (
+                        brand_id, name, price, size, rating, review_count, description
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    brand_id,
+                    row['Product Name'],
+                    price,
+                    row['Size'],
+                    rating,
+                    review,
+                    row.get('Description', '')  # Default empty description
+                ))
+                product_id = cursor.lastrowid
+ 
+                # Insert image
+                cursor.execute("INSERT INTO Image (product_id, url) VALUES (%s, %s)",
+                             (product_id, row['Images']))
+ 
+                # Handle relationships
+                process_relationships(cursor, product_id, row)
+ 
+def insert_paulas_choice_products(connection, csv_path):
+    with connection.cursor() as cursor:
+        paulas_choice_brand_name = "Paula's Choice"
+        cursor.execute("INSERT IGNORE INTO Brand (name) VALUES (%s)", (paulas_choice_brand_name,))
+        brand_id = cursor.lastrowid if cursor.rowcount > 0 else cursor.execute("SELECT id FROM Brand WHERE name = 'Paula\'s Choice'").fetchone()[0]
+ 
+        with open(csv_path, 'r', encoding='utf-8-sig') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                print(row)
+                cursor.execute("""
+                    INSERT INTO Product (
+                        brand_id, name, price, size, rating, review_count, description
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    brand_id,
+                    row['Product Name'],
+                    float(row['Price'].replace('$', '')),
+                    row['Size'],
+                    float(row['Rating']),
+                    extract_review_count(row['Review']),
+                    row['Description']
+                ))
+                product_id = cursor.lastrowid
+ 
+                # Insert image
+                cursor.execute("INSERT INTO Image (product_id, url) VALUES (%s, %s)",
+                             (product_id, row['Images']))
+ 
+                process_relationships(cursor, product_id, row)
+ 
+def insert_ordinary_products(connection, csv_path):
+    with connection.cursor() as cursor:
+        brand_id = get_brand_id(cursor, "Ordinary")
+        if not brand_id:
+            raise ValueError("Could not get/create brand ID for Ordinary")
+       
+        with open(csv_path, 'r', encoding='utf-8-sig') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                print(row)
+                cursor.execute("""
+                    INSERT INTO Product (
+                        brand_id, name, price, size, rating, review_count, description
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    brand_id,
+                    row['Product Name'],
+                    safe_float_conversion(row['Price'], default=-1),
+                    row['Size'],
+                    safe_float_conversion(row['Rating']),
+                    safe_float_conversion(row['Review'], default=0),
+                    row['Description']
+                ))
+                product_id = cursor.lastrowid
+ 
+                # Insert multiple images
+                image_fields = [f for f in reader.fieldnames if f.startswith('Images')]
+ 
+                for img_field in image_fields:
+                    if row.get(img_field):  # Safe get with default
+                        cursor.execute("INSERT INTO Image (product_id, url) VALUES (%s, %s)",
+                                       (product_id, row[img_field]))
+ 
+ 
+def process_relationships(cursor, product_id, row):
+    
+    for concern in row.get('Skin Concerns', '').split(', '):
+        if concern:
+            cursor.execute("INSERT IGNORE INTO SkinConcern (name) VALUES (%s)", (concern,))
+            if cursor.rowcount > 0:
+                concern_id = cursor.lastrowid
+            else:
+                cursor.execute("SELECT id FROM SkinConcern WHERE name = %s", (concern,))
+                result = cursor.fetchone()
+                concern_id = result['id'] if result else None  # Changed from [0] to ['id']
+ 
+            if concern_id:
+                cursor.execute("INSERT IGNORE INTO ProductSkinConcern (product_id, concern_id) VALUES (%s, %s)",
+                               (product_id, concern_id))
+ 
+    for skin_type in row.get('Skin Types', '').split(', '):
+        if skin_type:
+            cursor.execute("INSERT IGNORE INTO SkinType (name) VALUES (%s)", (skin_type,))
+            if cursor.rowcount > 0:
+                type_id = cursor.lastrowid
+            else:
+                cursor.execute("SELECT id FROM SkinType WHERE name = %s", (skin_type,))
+                result = cursor.fetchone()
+                type_id = result['id'] if result else None  # Changed from [0] to ['id']
+            cursor.execute("INSERT IGNORE INTO ProductSkinType (product_id, type_id) VALUES (%s, %s)",
+                         (product_id, type_id))
+ 
+    for ingredient in row.get('Key Ingredients', '').split(', '):
+        if ingredient:
+            cursor.execute("INSERT IGNORE INTO Ingredient (name) VALUES (%s)", (ingredient,))
+            if cursor.rowcount > 0:
+                ingredient_id = cursor.lastrowid
+            else:
+                cursor.execute("SELECT id FROM Ingredient WHERE name = %s", (ingredient,))
+                result = cursor.fetchone()
+                ingredient_id = result['id'] if result else None
+            cursor.execute("INSERT IGNORE INTO ProductIngredient (product_id, ingredient_id) VALUES (%s, %s)",
+                         (product_id, ingredient_id))
+ 
+def extract_review_count(review_str):
+    match = re.search(r'\d+', review_str)
+    return int(match.group()) if match else 0
+ 
+def safe_float_conversion(value, default=None):
+    """Convert string to float with error handling"""
+    try:
+        cleaned = value.replace('$', '').replace(',', '').strip()
+        return float(cleaned)
+    except (ValueError, TypeError, AttributeError):
+        return default
+   
+def get_brand_id(cursor, brand_name):
+    """Helper function to safely get or create brand ID"""
+    # Try to insert first
+    cursor.execute("INSERT IGNORE INTO Brand (name) VALUES (%s)", (brand_name,))
+    if cursor.rowcount > 0:
+        return cursor.lastrowid
+    else:
+        # If brand already exists, fetch the ID
+        cursor.execute("SELECT id FROM Brand WHERE name = %s", (brand_name,))
+        result = cursor.fetchone()
+        return result['id'] if result else None
+ 
+hdfs_url = 'http://100.77.34.80:9870'
+client = InsecureClient(hdfs_url, user='hdfs')
+ 
+# Specify HDFS folder path and local destination
+hdfs_folder_path = '/data-engineering/'
+local_folder_path = 'C:\\Users\\kavya\\DockerProjects\\hadoop\\downloaded_folder\\'
+unix_local_folder_path = '~/Downloads/csv/'
+ 
+# Create local directory if it doesn't exist
+os.makedirs(local_folder_path, exist_ok=True)
+ 
+# Download folder with parallel threads
+client.download(
+    hdfs_folder_path,
+    local_folder_path,
+    overwrite=True,
+    n_threads=4  # Parallelize folder downloads
+)
+ 
+connection = pymysql.connect(host='100.77.34.80',
+                             port=3307,
+                             user='root',
+                             password='123123',
+                             database='TestScript5',
+                             cursorclass=pymysql.cursors.DictCursor)
+ 
+try:
+    insert_dermstore_products(connection, f'{local_folder_path}\\data-engineering\\dermstore_products.csv')
+    insert_paulas_choice_products(connection, f'{local_folder_path}\\data-engineering\\paulas_choice_products.csv')
+    insert_ordinary_products(connection, f'{local_folder_path}\\data-engineering\\the_ordinary_products.csv')
+    connection.commit()
+finally:
+    connection.close()
