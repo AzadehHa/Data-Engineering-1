@@ -1,0 +1,270 @@
+import re
+import subprocess
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
+import time
+import requests
+import os
+import csv
+ 
+# Directory to save images
+image_dir = "paulas_images"
+if not os.path.exists(image_dir):
+    os.makedirs(image_dir)
+ 
+# Setup WebDriver with options
+options = Options()
+options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.90 Safari/537.36")
+options.add_argument("--disable-gpu")  # Disable GPU hardware acceleration
+driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+ 
+# Product URLs
+product_urls = [
+    "https://www.paulaschoice.com/5pct-vitamin-c-sheer-moisturizer-spf-50/136-1360.html",
+    "https://www.paulaschoice.com/calm-barrier-protect-mineral-sunscreen-spf-30/9200.html",
+    "https://www.paulaschoice.com/resist-barrier-repair-advanced-moisturizer/2240.html",
+    "https://www.paulaschoice.com/pro-collagen-peptide-plumping-moisturizer/1510.html",
+    "https://www.paulaschoice.com/resist-super-light-wrinkle-defense-spf-30/776.html",
+    "https://www.paulaschoice.com/resist-skin-restoring-moisturizer-with-spf-50/797.html",
+    "https://www.paulaschoice.com/clear-oil-free-moisturizer/380.html",
+    "https://www.paulaschoice.com/resist-intensive-repair-cream/781.html",
+    "https://www.paulaschoice.com/c5-super-boost-moisturizer/290.html",
+    "https://www.paulaschoice.com/resist-anti-aging-clear-skin-hydrator/769.html",
+    "https://www.paulaschoice.com/skin-recovery-replenishing-moisturizer/186.html",
+    "https://www.paulaschoice.com/defense-essential-glow-moisturizer-spf-30/223.html",
+    "https://www.paulaschoice.com/calm-rescue-and-repair-intensive-moisturizer/9250.html",
+    "https://www.paulaschoice.com/omegaand-complex-moisturizer/339.html",
+    "https://www.paulaschoice.com/moisture-boost-hydrating-treatment-cream/350.html",
+    "https://www.paulaschoice.com/clear-ultra-light-daily-hydrating-fluid-spf-30and/613.html",
+    "https://www.paulaschoice.com/water-infusing-electrolyte-moisturizer/700.html",
+    "https://www.paulaschoice.com/skin-recovery-daily-moisturizing-lotion-spf-30/146.html",
+    "https://www.paulaschoice.com/calm-rescue-and-repair-weightless-moisturizer/9220.html",
+    "https://www.paulaschoice.com/clinical-ultra-rich-moisturizer/557.html",
+    "https://www.paulaschoice.com/skin-balancing-invisible-finish-moisture-gel/340.html",
+    "https://www.paulaschoice.com/skin-balancing-ultra-sheer-daily-defense-broad-spectrum-spf-30/156.html",
+    "https://www.paulaschoice.com/earth-sourced-antioxidant-enriched-natural-moisturizer/852.html",
+    "https://www.paulaschoice.com/defense-nightly-reconditioning-moisturizer/222.html",
+    "https://www.paulaschoice.com/ultra-rich-soothing-body-butter/556.html",
+    "https://www.paulaschoice.com/clinical-ceramide-enriched-firming-moisturizer/212.html",
+    "https://www.paulaschoice.com/resist-youth-extending-daily-hydrating-fluid-spf-50/780.html",
+    "https://www.paulaschoice.com/25pct-vitamin-c-and-glutathione-clinical-serum/1490.html",
+    "https://www.paulaschoice.com/resist-triple-active-total-repair-serum/1020.html",
+    "https://www.paulaschoice.com/clinical-niacinamide-20pct-treatment/803.html",
+    "https://www.paulaschoice.com/resist-intensive-wrinkle-repair-retinol-serum/771.html",
+    "https://www.paulaschoice.com/resist-super-antioxidant-serum/764.html",
+    "https://www.paulaschoice.com/clinical-discoloration-repair-serum/804.html",
+    "https://www.paulaschoice.com/calm-repairing-serum/372.html",
+    "https://www.paulaschoice.com/clinical-phytoestrogen-elasticity-renewal-serum/219.html",
+    "https://www.paulaschoice.com/omegaand-complex-serum/213.html",
+    "https://www.paulaschoice.com/resist-ultra-light-super-antioxidant-concentrate-serum/774.html",
+    "https://www.paulaschoice.com/skin-recovery-super-antioxidant-concentrate-serum-with-retinol/325.html",
+    "https://www.paulaschoice.com/defense-antioxidant-pore-purifier/220.html",
+    "https://www.paulaschoice.com/earth-sourced-power-berry-serum/853.html",
+    "https://www.paulaschoice.com/skin-balancing-super-antioxidant-concentrate-serum-with-retinol/335.html",
+]
+ 
+# Define CSV headers
+headers = [
+    "Product Name", "Skin Concerns", "Skin Types", "Key Ingredients", "Price",
+    "Description", "Rating", "Review", "Size", "Images"
+]
+ 
+# Create and open the CSV file
+csv_filename = "paulas_choice_products.csv"
+with open(csv_filename, mode="w", newline="", encoding="utf-8") as csvfile:
+    writer = csv.writer(csvfile)
+    writer.writerow(headers)  # Write headers as the first row
+ 
+    for url in product_urls:
+        driver.get(url)
+        time.sleep(10)
+        try:
+             # Extract product name
+            product_name_element = driver.find_element(By.CSS_SELECTOR, "div.ProductDetailsMainInfoRowstyles__DesktopOnly-sc-1d2jk23-1.eJfCZM > h1")
+            product_name = product_name_element.get_attribute("textContent").strip()  # Use textContent to get all text, including line breaks
+             # Debug: Print the raw product name
+            print(f"Raw Product Name: {repr(product_name)}")
+ 
+            # Clean up the product name
+            product_name = re.sub(r"\s+", " ", product_name)  # Replace all whitespace with a single space
+            product_name = product_name.strip()  # Remove any leading or trailing spaces
+ 
+            # Debug: Print the cleaned product name
+            print(f"Cleaned Product Name: {repr(product_name)}")
+ 
+            # Extract skin concerns
+            skin_concerns = []
+            skin_concerns_section = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "SkinTypeSkinConcernSectionstyles__SkinInfoRow-sc-14azfzp-2"))
+            )
+            concern_items = skin_concerns_section.find_elements(By.CLASS_NAME, "SkinTypeSkinConcernSectionstyles__SkinInfo-sc-14azfzp-4")
+            for item in concern_items:
+                concern_text = item.find_element(By.CLASS_NAME, "large6.normalcase").text.strip()
+                skin_concerns.append(concern_text)
+ 
+            # Extract skin types
+            skin_types = []
+            skin_types_section = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "SkinTypeSkinConcernSectionstyles__SkinInfoRow-sc-14azfzp-2.cLonfh"))
+            )
+            skin_type_items = skin_types_section.find_elements(By.CLASS_NAME, "SkinTypeSkinConcernSectionstyles__SkinInfo-sc-14azfzp-4")
+            for item in skin_type_items:
+                skin_type_text = item.find_element(By.CLASS_NAME, "large6.normalcase").text.strip()
+                skin_types.append(skin_type_text)
+ 
+            # Extract key ingredients
+            key_ingredients = []
+            try:
+                key_ingredients_selector = '[aria-label="Key Ingredients"]'
+                key_ingredients_section = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, key_ingredients_selector))
+                )
+                ingredient_items = key_ingredients_section.find_elements(By.CSS_SELECTOR, "li > span > div")
+                for item in ingredient_items:
+                    ingredient_text_unstripped = item.get_attribute("innerHTML")
+                    ingredient_text = re.sub("<span.*/span>", "", ingredient_text_unstripped)
+                    if ingredient_text:
+                        key_ingredients.append(ingredient_text)
+            except Exception as e:
+                print(f"Error extracting key ingredients for {url}: {e}")
+ 
+            # Extract price
+            try:
+                price_element = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "span.Price__CurrentPrice-sc-ge6zh5-4.cnZPZv"))
+                )
+                full_text = price_element.get_attribute("textContent").strip()
+                price = full_text.replace("Current Price", "").strip()
+                if not price:
+                    price = "Price not found"
+            except Exception as e:
+                print(f"Error extracting price for {url}: {e}")
+                price = "Price not found"
+ 
+            # Extract product details
+            try:
+                details_element = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.Htmlstyles__HtmlWrapper-sc-pdfud1-0.cRtCSh"))
+                )
+                description = driver.execute_script("return arguments[0].textContent;", details_element).strip()
+                if not description:
+                    description = "Description not found"
+            except Exception as e:
+                print(f"Error extracting product details for {url}: {e}")
+                description = "Description not found"
+ 
+            # Extract rating and review information
+            try:
+                rating_element = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "span.Rating__AverageRating-sc-5ctqvj-7.cgNbVd"))
+                )
+                rating = rating_element.text.strip()
+            except Exception as e:
+                print(f"Error extracting rating for {url}: {e}")
+                rating = "Rating not found"
+ 
+            try:
+                review_element = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "span.Rating__Reviews-sc-5ctqvj-6.glacor"))
+                )
+                review = review_element.get_attribute("aria-label")
+                if not review:
+                    review = review_element.text.strip()
+                if not review:
+                    review = "Review not found"
+            except Exception as e:
+                print(f"Error extracting review for {url}: {e}")
+                review = "Review not found"
+ 
+            # Extract size information
+            try:
+                size_name_element = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.ProductDetailsMainInfoRowstyles__SizeName-sc-1d2jk23-25.eGTutI"))
+                )
+                size_name = size_name_element.text.strip()
+            except Exception as e:
+                print(f"Error extracting size name for {url}: {e}")
+                size_name = "Size name not found"
+ 
+            try:
+                size_volume_element = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.ProductDetailsMainInfoRowstyles__SizeVolume-sc-1d2jk23-26.cbvexu"))
+                )
+                size_volume = size_volume_element.text.strip()
+            except Exception as e:
+                print(f"Error extracting size volume for {url}: {e}")
+                size_volume = "Size volume not found"
+ 
+            size = f"{size_name} {size_volume}".strip()
+ 
+            # Extract and save product images
+            image_urls = []
+            try:
+                image_section = WebDriverWait(driver, 10).until(
+                    EC.visibility_of_element_located((By.CSS_SELECTOR, "div.ProductImageViewerstyles__DesktopImageArea-sc-52pfj-5.epfXik"))
+                )
+                image_elements = image_section.find_elements(By.CSS_SELECTOR, "img.ResponsiveImage__StyledImage-sc-q2ykl2-1.ikOtCz")
+                for i, img in enumerate(image_elements):
+                    img_url = img.get_attribute("src")
+                    if img_url:
+                        image_urls.append(img_url)
+                        image_name = f"{product_name.replace('/', '_')}_{i + 1}.jpg"
+                        image_path = os.path.join(image_dir, image_name)
+                        with open(image_path, "wb") as f:
+                            f.write(requests.get(img_url).content)
+                        print(f"Saved image: {image_name}")
+            except Exception as e:
+                print(f"Error extracting product images for {url}: {e}")
+ 
+            # Prepare row data
+            row_data = [
+                product_name,
+                ", ".join(skin_concerns),
+                ", ".join(skin_types),
+                ", ".join(key_ingredients),
+                price,
+                description,
+                rating,
+                review,
+                size,
+                ", ".join(image_urls)  # Join image URLs into a single string
+            ]
+ 
+            # Write row data to CSV
+            writer.writerow(row_data)
+ 
+            # Print product details (optional)
+            print(f"Product Name: {product_name}")
+            print("Skin Concerns:", ", ".join(skin_concerns))
+            print("Skin Types:", ", ".join(skin_types))
+            print("Key Ingredients:", ", ".join(key_ingredients))
+            print(f"Price: {price}")
+            print("Description:", description)
+            print(f"Rating: {rating}")
+            print(f"Review: {review}")
+            print(f"Size: {size}")
+            print("-" * 50)
+ 
+        except Exception as e:
+            print(f"Error fetching details for {url}: {e}")
+ 
+driver.quit()
+print(f"Data has been saved to {csv_filename}")
+ 
+def upload_to_hdfs(local_path, hdfs_path):
+    command = ['hdfscli', 'upload', '--alias=dev', '--force' , local_path, hdfs_path]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"File uploaded successfully to {hdfs_path}")
+    else:
+        print(f"Upload failed: {result.stderr}")
+ 
+# Usage
+local_path = f'.\\{csv_filename}'
+hdfs_path = f'/data-engineering/{csv_filename}'
+upload_to_hdfs(local_path, hdfs_path)
