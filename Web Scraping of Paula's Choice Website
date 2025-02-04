@@ -12,7 +12,7 @@ import requests
 import os
 import csv
  
-# Directory to save images
+# Saving Images
 image_dir = "paulas_images"
 if not os.path.exists(image_dir):
     os.makedirs(image_dir)
@@ -23,7 +23,7 @@ options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) Apple
 options.add_argument("--disable-gpu")  # Disable GPU hardware acceleration
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
  
-# Product URLs
+# Products URLs
 product_urls = [
     "https://www.paulaschoice.com/5pct-vitamin-c-sheer-moisturizer-spf-50/136-1360.html",
     "https://www.paulaschoice.com/calm-barrier-protect-mineral-sunscreen-spf-30/9200.html",
@@ -68,13 +68,12 @@ product_urls = [
     "https://www.paulaschoice.com/skin-balancing-super-antioxidant-concentrate-serum-with-retinol/335.html",
 ]
  
-# Define CSV headers
+# Creating and Opening CSV
 headers = [
     "Product Name", "Skin Concerns", "Skin Types", "Key Ingredients", "Price",
     "Description", "Rating", "Review", "Size", "Images"
 ]
  
-# Create and open the CSV file
 csv_filename = "paulas_choice_products.csv"
 with open(csv_filename, mode="w", newline="", encoding="utf-8") as csvfile:
     writer = csv.writer(csvfile)
@@ -84,20 +83,19 @@ with open(csv_filename, mode="w", newline="", encoding="utf-8") as csvfile:
         driver.get(url)
         time.sleep(10)
         try:
-             # Extract product name
+             # Extract Products Name
             product_name_element = driver.find_element(By.CSS_SELECTOR, "div.ProductDetailsMainInfoRowstyles__DesktopOnly-sc-1d2jk23-1.eJfCZM > h1")
             product_name = product_name_element.get_attribute("textContent").strip()  # Use textContent to get all text, including line breaks
              # Debug: Print the raw product name
             print(f"Raw Product Name: {repr(product_name)}")
  
-            # Clean up the product name
-            product_name = re.sub(r"\s+", " ", product_name)  # Replace all whitespace with a single space
-            product_name = product_name.strip()  # Remove any leading or trailing spaces
+            product_name = re.sub(r"\s+", " ", product_name)  
+            product_name = product_name.strip()  
  
             # Debug: Print the cleaned product name
             print(f"Cleaned Product Name: {repr(product_name)}")
  
-            # Extract skin concerns
+            # Extract Skin Concerns
             skin_concerns = []
             skin_concerns_section = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "SkinTypeSkinConcernSectionstyles__SkinInfoRow-sc-14azfzp-2"))
@@ -107,7 +105,7 @@ with open(csv_filename, mode="w", newline="", encoding="utf-8") as csvfile:
                 concern_text = item.find_element(By.CLASS_NAME, "large6.normalcase").text.strip()
                 skin_concerns.append(concern_text)
  
-            # Extract skin types
+            # Extract Skin Types
             skin_types = []
             skin_types_section = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "SkinTypeSkinConcernSectionstyles__SkinInfoRow-sc-14azfzp-2.cLonfh"))
@@ -117,7 +115,7 @@ with open(csv_filename, mode="w", newline="", encoding="utf-8") as csvfile:
                 skin_type_text = item.find_element(By.CLASS_NAME, "large6.normalcase").text.strip()
                 skin_types.append(skin_type_text)
  
-            # Extract key ingredients
+            # Extract Key Ingredients
             key_ingredients = []
             try:
                 key_ingredients_selector = '[aria-label="Key Ingredients"]'
@@ -133,7 +131,7 @@ with open(csv_filename, mode="w", newline="", encoding="utf-8") as csvfile:
             except Exception as e:
                 print(f"Error extracting key ingredients for {url}: {e}")
  
-            # Extract price
+            # Extract Price
             try:
                 price_element = WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "span.Price__CurrentPrice-sc-ge6zh5-4.cnZPZv"))
@@ -146,7 +144,7 @@ with open(csv_filename, mode="w", newline="", encoding="utf-8") as csvfile:
                 print(f"Error extracting price for {url}: {e}")
                 price = "Price not found"
  
-            # Extract product details
+            # Extract Product Details
             try:
                 details_element = WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "div.Htmlstyles__HtmlWrapper-sc-pdfud1-0.cRtCSh"))
@@ -158,7 +156,7 @@ with open(csv_filename, mode="w", newline="", encoding="utf-8") as csvfile:
                 print(f"Error extracting product details for {url}: {e}")
                 description = "Description not found"
  
-            # Extract rating and review information
+            # Extract Rating and Review Information
             try:
                 rating_element = WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "span.Rating__AverageRating-sc-5ctqvj-7.cgNbVd"))
@@ -181,7 +179,7 @@ with open(csv_filename, mode="w", newline="", encoding="utf-8") as csvfile:
                 print(f"Error extracting review for {url}: {e}")
                 review = "Review not found"
  
-            # Extract size information
+            # Extract Size Information
             try:
                 size_name_element = WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "div.ProductDetailsMainInfoRowstyles__SizeName-sc-1d2jk23-25.eGTutI"))
@@ -202,7 +200,7 @@ with open(csv_filename, mode="w", newline="", encoding="utf-8") as csvfile:
  
             size = f"{size_name} {size_volume}".strip()
  
-            # Extract and save product images
+            # Extract and Save Product Images
             image_urls = []
             try:
                 image_section = WebDriverWait(driver, 10).until(
@@ -221,7 +219,7 @@ with open(csv_filename, mode="w", newline="", encoding="utf-8") as csvfile:
             except Exception as e:
                 print(f"Error extracting product images for {url}: {e}")
  
-            # Prepare row data
+            # Prepare Row Data
             row_data = [
                 product_name,
                 ", ".join(skin_concerns),
@@ -235,10 +233,10 @@ with open(csv_filename, mode="w", newline="", encoding="utf-8") as csvfile:
                 ", ".join(image_urls)  # Join image URLs into a single string
             ]
  
-            # Write row data to CSV
+            # Write Row Data to CSV
             writer.writerow(row_data)
  
-            # Print product details (optional)
+            # Print Product Details
             print(f"Product Name: {product_name}")
             print("Skin Concerns:", ", ".join(skin_concerns))
             print("Skin Types:", ", ".join(skin_types))
@@ -264,7 +262,7 @@ def upload_to_hdfs(local_path, hdfs_path):
     else:
         print(f"Upload failed: {result.stderr}")
  
-# Usage
+# Upload CSV to HDFS
 local_path = f'.\\{csv_filename}'
 hdfs_path = f'/data-engineering/{csv_filename}'
 upload_to_hdfs(local_path, hdfs_path)
